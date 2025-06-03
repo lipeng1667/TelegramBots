@@ -1,4 +1,3 @@
-
 # HuiTouZaiShuo Telegram To-Do Bot
 
 A private Telegram bot for managing your personal to-do list, designed with role-based access so that only the root user can clear or modify any task. Normal users can add, list, mark done, and view tasks. Data is stored locally on the server for privacy and persistence.
@@ -11,6 +10,8 @@ A private Telegram bot for managing your personal to-do list, designed with role
 - View unfinished tasks
 - Move finished tasks to the end of the list
 - Root user can clear all tasks or modify any task
+- Root user can delete any specific task
+- Root user can clear only completed tasks or all tasks
 - All task changes are saved to a local text file
 
 ---
@@ -61,13 +62,13 @@ sudo make altinstall
 ### 4. Install dependencies
 
 ```bash
-/usr/local/bin/python3.10 -m pip install python-telegram-bot
+/usr/local/bin/python3.10 -m pip install python-telegram-bot python-dotenv
 ```
 
 Or if using your system Python 3.10+:
 
 ```bash
-pip install python-telegram-bot
+pip install python-telegram-bot python-dotenv
 ```
 
 ---
@@ -76,13 +77,16 @@ pip install python-telegram-bot
 
 1. **Clone or upload the project files to your server.**
 
-2. **Set your Telegram bot token and your root user ID:**
-   - In `HuiTouZaiShuoBot.py`, set:
+2. **Create a `.env` file in your project directory with your bot token and root user ID:**
 
-     ```python
-     BOT_TOKEN = 'YOUR_BOT_TOKEN'
-     ROOT_USER_ID = YOUR_TELEGRAM_USER_ID  # Example: 12345678
-     ```
+   Example `.env` file:
+
+   ```text
+   BOT_TOKEN=your-telegram-bot-token
+   ROOT_USER_ID=123456789
+   ```
+
+   > **Note:** The `.env` file is required and should NOT be committed to your repository.
 
    - You can get your Telegram user ID by messaging [@userinfobot](https://t.me/userinfobot) in Telegram.
 
@@ -111,8 +115,17 @@ pip install python-telegram-bot
 | `/refresh`               | Move all finished tasks to the end of the list                | No             |
 | `/unfinished`            | List all unfinished tasks                                     | No             |
 | `/help`                  | Show the help message                                         | No             |
-| `/clear`                 | Clear all tasks                                               | Yes            |
+| `/clear`                 | Clear all tasks or only completed tasks (see usage below)    | Yes            |
 | `/modify <task_number>`  | Modify a specific task (you will be prompted for new content) | Yes            |
+| `/delete <task_number>`  | Delete a specific task by its number                          | Yes            |
+
+---
+
+### Usage Examples
+
+- `/clear all` — Clear all tasks (root only)
+- `/clear done` — Clear only tasks that are marked as completed (root only)
+- `/delete 3` — Delete task number 3 (root only)
 
 ---
 
@@ -122,9 +135,11 @@ pip install python-telegram-bot
 - All data is stored locally in `tasks.txt` in the bot's directory.
 - If you wish to run the bot in the background, use `nohup`:
 
-  ```bash
-  nohup python3 HuiTouZaiShuoBot.py > bot.log 2>&1 &
-  ```
+   ```bash
+   nohup python3 HuiTouZaiShuoBot.py > bot.log 2>&1 &
+   ```
+
+- The `.env` file stores secrets and should be added to `.gitignore` to avoid publishing sensitive information.
 
 ---
 
@@ -133,6 +148,8 @@ pip install python-telegram-bot
 - **Bot not responding?** Double-check your bot token and your network connection.
 - **Python errors?** Ensure you’re running Python 3.10+ and have installed all dependencies.
 - **Telegram messages delayed?** Check your server time and timezone settings.
+
+- **Missing `python-dotenv` error?** Make sure you've installed it in your Python environment.
 
 ---
 

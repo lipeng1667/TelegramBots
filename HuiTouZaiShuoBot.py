@@ -26,6 +26,7 @@ def log_request(update: Update, command: str, response: str):
 tasks = []
 confirmation_tasks = {}
 modification_tasks = {}
+delete_confirmation_tasks = {}
 
 TASKS_FILE = "tasks.txt"
 
@@ -131,29 +132,40 @@ async def list_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_request(update, "/list", reply)
 
  # Function: clear_tasks
- # Usage: Clears all tasks from the list (root only)
+ # Usage: Clears all tasks or only completed tasks from the list (root only)
  # Parameters: update (telegram.Update), context (telegram.ext.ContextTypes.DEFAULT_TYPE)
  # Creation Date: 2025-05-26
  # Author: Michael
- # Modification Date: 2025-05-26
+ # Modification Date: 2025-06-02
 async def clear_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_root_user(update):
         response = "Unauthorized. Only the root user can clear the list."
         await update.message.reply_text(response)
         log_request(update, "/clear", response)
         return
-    tasks.clear()
-    save_tasks()
-    response = "All tasks have been cleared."
-    await update.message.reply_text(response)
-    log_request(update, "/clear", response)
+    arg = None
+    if context.args:
+        arg = context.args[0].lower()
+    else:
+        arg = "all"
+    if arg == "all":
+        tasks.clear()
+        save_tasks()
+        response = "All tasks have been cleared."
+        await update.message.reply_text(response)
+        log_request(update, "/clear all", response)
+    elif arg == "done":
+        original_count = len(tasks)
+        tasks[:] = [t for t in tasks if not t["done"]]
+        save_tasks()
+        response = "All completed tasks have been cleared."
+        await update.message.reply_text(response)
+        log_request(update, "/clear done", response)
+    else:
+        response = "Usage: /clear [all|done]"
+        await update.message.reply_text(response)
+        log_request(update, f"/clear {arg}", response)
 
- # Function: help_command
- # Usage: Shows the help message with available commands
- # Parameters: update (telegram.Update), context (telegram.ext.ContextTypes.DEFAULT_TYPE)
- # Creation Date: 2025-05-26
- # Author: Michael
- # Modification Date: 2025-05-26
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     root = is_root_user(update)
     help_lines = [
@@ -164,12 +176,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/done <task_number> - Mark a task as done",
     ]
     if root:
-        help_lines.append("/clear - Clear all tasks (root only)")
+        help_lines.append("/clear [all|done] - Clear all tasks or only completed tasks (root only)")
+        help_lines.append("/delete <task_number> - Delete a specific task by its number (root only)")
         help_lines.append("/modify <task_number> - Modify a specific task (root only)")
     help_lines += [
         "/refresh - Move completed tasks to the end and show number of pending tasks",
         "/unfinished - Show only unfinished tasks",
-        "/help - Show this help message"
+        "/help - Show this help message",
+        "",
+        "Usage examples:",
+        "  /clear all    - Clear all tasks (root only)",
+        "  /clear done   - Clear only tasks that are marked as completed (root only)",
+        "  /delete 3     - Delete task number 3 (root only)",
     ]
     help_text = "\n".join(help_lines)
     await update.message.reply_text(help_text)
@@ -216,6 +234,23 @@ async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
  # Modification Date: 2025-05-26
 async def handle_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+
+    # Handle delete confirmation for root user
+    if user_id in delete_confirmation_tasks:
+        task_index = delete_confirmation_tasks[user_id]
+        if update.message.text.strip().lower() == "yes":
+            deleted_task_number = task_index + 1
+            del tasks[task_index]
+            save_tasks()
+            response = f"Task {deleted_task_number} has been deleted."
+            await update.message.reply_text(response)
+            log_request(update, "/delete", response)
+        else:
+            response = "Delete operation cancelled."
+            await update.message.reply_text(response)
+            log_request(update, "/delete", response)
+        del delete_confirmation_tasks[user_id]
+        return
 
     # Handle modification for root user
     if user_id in modification_tasks:
@@ -320,6 +355,36 @@ async def modify_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(response)
     log_request(update, "/modify", response)
 
+ # Function: delete_task
+ # Usage: Deletes a specific task (root only)
+ # Parameters: update (telegram.Update), context (telegram.ext.ContextTypes.DEFAULT_TYPE)
+ # Creation Date: 2025-06-01
+ # Author: Michael
+ # Modification Date: 2025-06-01
+async def delete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_root_user(update):
+        response = "Unauthorized. Only the root user can delete tasks."
+        await update.message.reply_text(response)
+        log_request(update, "/delete", response)
+        return
+    if not context.args or not context.args[0].isdigit():
+        response = "Usage: /delete <task_number>"
+        await update.message.reply_text(response)
+        log_request(update, "/delete", response)
+        return
+    task_index = int(context.args[0]) - 1
+    if task_index < 0 or task_index >= len(tasks):
+        response = "Invalid task number."
+        await update.message.reply_text(response)
+        log_request(update, "/delete", response)
+        return
+    user_id = update.effective_user.id
+    delete_confirmation_tasks[user_id] = task_index
+    response = f"Are you sure you want to delete task {context.args[0]}?\n\n\"{tasks[task_index]['task']}\"\n\nReply Yes or No."
+    await update.message.reply_text(response)
+    log_request(update, "/delete", response)
+    return
+
 from telegram.ext import MessageHandler, filters
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -332,6 +397,7 @@ app.add_handler(CommandHandler("done", mark_done))
 app.add_handler(CommandHandler("refresh", refresh_tasks))
 app.add_handler(CommandHandler("unfinished", show_unfinished))
 app.add_handler(CommandHandler("modify", modify_task))
+app.add_handler(CommandHandler("delete", delete_task))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_confirmation))
 
 # Function: error_handler
